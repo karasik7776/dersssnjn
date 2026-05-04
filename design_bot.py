@@ -6,7 +6,7 @@ from aiogram import Bot, Dispatcher, F, types
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import Message, CallbackQuery, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import Message, CallbackQuery, ReplyKeyboardMarkup, KeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.client.default import DefaultBotProperties
 
@@ -32,19 +32,17 @@ def save_forms():
         json.dump(user_forms, f, ensure_ascii=False, indent=2)
 
 user_forms = load_forms()
-waiting_for_design = {}  # {admin_id: {'user_id': id, 'type': 'photo' or 'text'}}
+waiting_for_design = {}
 
 def is_admin(user_id: int) -> bool:
     return user_id in ADMIN_IDS
 
 # ========== КЛАВИАТУРЫ ==========
-# Главное меню для всех
 main_menu = ReplyKeyboardMarkup(
     keyboard=[[KeyboardButton(text="🆕 Новый проект")]],
     resize_keyboard=True
 )
 
-# Админ-меню (показывается только админам)
 admin_menu = ReplyKeyboardMarkup(
     keyboard=[
         [KeyboardButton(text="📋 Список клиентов"), KeyboardButton(text="📊 Статистика")],
@@ -82,7 +80,6 @@ def inline_buttons(options, prefix, cols=2):
     builder.adjust(cols)
     return builder.as_markup()
 
-# ========== ПРОВЕРКА АДМИНА ==========
 async def show_admin_menu(message: Message):
     if is_admin(message.from_user.id):
         await message.answer("👑 *Админ-панель*", parse_mode="Markdown", reply_markup=admin_menu)
@@ -126,7 +123,7 @@ async def admin_users(message: Message):
         return
     
     if not user_forms:
-        await message.answer("📭 *Нет заявок*\n\nПройдите опрос как клиент, чтобы создать заявку.", parse_mode="Markdown")
+        await message.answer("📭 *Нет заявок*", parse_mode="Markdown")
         return
     
     text = "📋 *Список клиентов:*\n\n"
@@ -135,7 +132,7 @@ async def admin_users(message: Message):
         text += f"   📅 {data.get('date', '?')}\n\n"
     
     if len(text) > 4000:
-        text = text[:3500] + "\n\n... (список слишком длинный)"
+        text = text[:3500] + "\n\n..."
     
     await message.answer(text, parse_mode="Markdown")
 
@@ -143,11 +140,8 @@ async def admin_users(message: Message):
 async def admin_stats(message: Message):
     if not is_admin(message.from_user.id):
         return
-    
     await message.answer(
-        f"📊 *Статистика {PROJECT_NAME}*\n\n"
-        f"👥 Заявок в базе: {len(user_forms)}\n"
-        f"👑 Админов: {len(ADMIN_IDS)}",
+        f"📊 *Статистика*\n\n👥 Заявок: {len(user_forms)}\n👑 Админов: {len(ADMIN_IDS)}",
         parse_mode="Markdown"
     )
 
@@ -155,18 +149,13 @@ async def admin_stats(message: Message):
 async def admin_send_design(message: Message, state: FSMContext):
     if not is_admin(message.from_user.id):
         return
-    
     await state.set_state(AdminStates.waiting_for_user_id)
     await state.update_data(send_type="photo")
     await message.answer(
-        "📸 *Отправка дизайна*\n\n"
-        "Введите ID пользователя, которому хотите отправить дизайн.\n\n"
-        "ID можно найти в списке клиентов (/users) или узнать у @userinfobot\n\n"
-        "👉 *Введите USER_ID:*",
+        "📸 *Введите ID пользователя:*\n\nID можно найти в списке клиентов",
         parse_mode="Markdown",
         reply_markup=ReplyKeyboardMarkup(
-            keyboard=[[KeyboardButton(text="🔙 Отмена")]],
-            resize_keyboard=True
+            keyboard=[[KeyboardButton(text="🔙 Отмена")]], resize_keyboard=True
         )
     )
 
@@ -174,25 +163,20 @@ async def admin_send_design(message: Message, state: FSMContext):
 async def admin_send_message(message: Message, state: FSMContext):
     if not is_admin(message.from_user.id):
         return
-    
     await state.set_state(AdminStates.waiting_for_user_id)
     await state.update_data(send_type="text")
     await message.answer(
-        "💬 *Отправка сообщения*\n\n"
-        "Введите ID пользователя, которому хотите отправить сообщение.\n\n"
-        "ID можно найти в списке клиентов (/users) или узнать у @userinfobot\n\n"
-        "👉 *Введите USER_ID:*",
+        "💬 *Введите ID пользователя:*",
         parse_mode="Markdown",
         reply_markup=ReplyKeyboardMarkup(
-            keyboard=[[KeyboardButton(text="🔙 Отмена")]],
-            resize_keyboard=True
+            keyboard=[[KeyboardButton(text="🔙 Отмена")]], resize_keyboard=True
         )
     )
 
 @dp.message(F.text == "🔙 Отмена")
-async def cancel_admin_action(message: Message, state: FSMContext):
+async def cancel_admin(message: Message, state: FSMContext):
     await state.clear()
-    await message.answer("Действие отменено", reply_markup=admin_menu)
+    await message.answer("Отменено", reply_markup=admin_menu)
 
 @dp.message(AdminStates.waiting_for_user_id)
 async def get_user_id(message: Message, state: FSMContext):
@@ -210,28 +194,24 @@ async def get_user_id(message: Message, state: FSMContext):
             await state.update_data(target_user_id=user_id)
             await state.set_state(AdminStates.waiting_for_design_photo)
             await message.answer(
-                f"📸 *Отправьте фото дизайна* для пользователя `{user_id}`\n\n"
-                f"Просто отправьте фото в этот чат.",
+                f"📸 *Отправьте фото* для пользователя `{user_id}`",
                 parse_mode="Markdown",
                 reply_markup=ReplyKeyboardMarkup(
-                    keyboard=[[KeyboardButton(text="🔙 Отмена")]],
-                    resize_keyboard=True
+                    keyboard=[[KeyboardButton(text="🔙 Отмена")]], resize_keyboard=True
                 )
             )
         else:
             await state.update_data(target_user_id=user_id)
             await state.set_state(AdminStates.waiting_for_message_text)
             await message.answer(
-                f"💬 *Введите текст сообщения* для пользователя `{user_id}`\n\n"
-                f"Отправьте текст в этот чат.",
+                f"💬 *Введите текст* для пользователя `{user_id}`",
                 parse_mode="Markdown",
                 reply_markup=ReplyKeyboardMarkup(
-                    keyboard=[[KeyboardButton(text="🔙 Отмена")]],
-                    resize_keyboard=True
+                    keyboard=[[KeyboardButton(text="🔙 Отмена")]], resize_keyboard=True
                 )
             )
     except ValueError:
-        await message.answer("❌ Неверный ID. Введите число или нажмите «Отмена»")
+        await message.answer("❌ Неверный ID, введите число")
 
 @dp.message(AdminStates.waiting_for_design_photo, F.photo)
 async def send_design_photo(message: Message, state: FSMContext):
@@ -242,21 +222,12 @@ async def send_design_photo(message: Message, state: FSMContext):
         await bot.send_photo(
             chat_id=user_id,
             photo=message.photo[-1].file_id,
-            caption="🎉 *Ваш дизайн-проект готов!*\n\nСпасибо, что выбрали «Будущий дом»! 🏠",
+            caption="🎉 *Ваш дизайн-проект готов!*\n\nСпасибо, что выбрали нас! 🏠",
             parse_mode="Markdown"
         )
-        await message.answer(f"✅ *Дизайн успешно отправлен* пользователю `{user_id}`", parse_mode="Markdown")
-        print(f"✅ Дизайн отправлен пользователю {user_id} админом {message.from_user.id}")
+        await message.answer(f"✅ *Отправлено* пользователю `{user_id}`", parse_mode="Markdown")
     except Exception as e:
-        error_text = str(e)
-        if "chat not found" in error_text.lower() or "bot was blocked" in error_text.lower():
-            await message.answer(
-                f"❌ *Ошибка:* Пользователь `{user_id}` не найден или бот заблокирован.\n\n"
-                f"Убедитесь, что пользователь написал боту `/start`",
-                parse_mode="Markdown"
-            )
-        else:
-            await message.answer(f"❌ *Ошибка:* {error_text}", parse_mode="Markdown")
+        await message.answer(f"❌ *Ошибка:* {e}", parse_mode="Markdown")
     
     await state.clear()
     await message.answer("Вернулись в админ-меню", reply_markup=admin_menu)
@@ -278,18 +249,9 @@ async def send_message_text(message: Message, state: FSMContext):
             text=f"✉️ *Сообщение от дизайнера:*\n\n{text}\n\n— {PROJECT_NAME}",
             parse_mode="Markdown"
         )
-        await message.answer(f"✅ *Сообщение отправлено* пользователю `{user_id}`", parse_mode="Markdown")
-        print(f"✅ Сообщение отправлено пользователю {user_id} админом {message.from_user.id}")
+        await message.answer(f"✅ *Отправлено* пользователю `{user_id}`", parse_mode="Markdown")
     except Exception as e:
-        error_text = str(e)
-        if "chat not found" in error_text.lower() or "bot was blocked" in error_text.lower():
-            await message.answer(
-                f"❌ *Ошибка:* Пользователь `{user_id}` не найден или бот заблокирован.\n\n"
-                f"Убедитесь, что пользователь написал боту `/start`",
-                parse_mode="Markdown"
-            )
-        else:
-            await message.answer(f"❌ *Ошибка:* {error_text}", parse_mode="Markdown")
+        await message.answer(f"❌ *Ошибка:* {e}", parse_mode="Markdown")
     
     await state.clear()
     await message.answer("Вернулись в админ-меню", reply_markup=admin_menu)
@@ -297,7 +259,7 @@ async def send_message_text(message: Message, state: FSMContext):
 @dp.message(AdminStates.waiting_for_design_photo)
 async def wrong_photo_input(message: Message):
     if message.text == "🔙 Отмена":
-        await cancel_admin_action(message, AdminStates.waiting_for_design_photo)
+        await cancel_admin(message, AdminStates.waiting_for_design_photo)
     else:
         await message.answer("❌ Отправьте фото или нажмите «Отмена»")
 
@@ -401,34 +363,25 @@ async def get_photo(msg: Message, state: FSMContext):
 
 👤 {msg.from_user.full_name}
 🆔 `{msg.from_user.id}`
-
-📌 *Чтобы отправить дизайн:* используйте админ-меню → «Отправить дизайн»
 """
     
     for admin_id in ADMIN_IDS:
         await bot.send_photo(admin_id, photo_id, caption=caption, parse_mode="Markdown")
     
-    await msg.answer("✅ *Заявка отправлена!* Дизайнер свяжется с вами.", parse_mode="Markdown", reply_markup=main_menu)
+    await msg.answer("✅ *Заявка отправлена!*", parse_mode="Markdown", reply_markup=main_menu)
+    if is_admin(msg.from_user.id):
+        await show_admin_menu(msg)
     await state.clear()
 
 @dp.message(Form.waiting_for_photo)
 async def wrong_input(msg: Message):
-    await msg.answer("❌ Отправьте фото комнаты.")
+    await msg.answer("❌ Отправьте фото комнаты")
 
 # ========== ЗАПУСК ==========
 async def main():
     print(f"🤖 {PROJECT_NAME} запущен!")
     print(f"👑 Админы: {ADMIN_IDS}")
-    print(f"📂 Загружено заявок из файла: {len(user_forms)}")
-    print("🚀 Бот работает! У админов есть кнопки в меню.")
-    
-    try:
-        me = await bot.get_me()
-        print(f"✅ Бот подключился! Имя: {me.first_name}")
-    except Exception as e:
-        print(f"❌ Ошибка подключения: {e}")
-        return
-    
+    print(f"📂 Загружено заявок: {len(user_forms)}")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
