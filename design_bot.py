@@ -15,11 +15,9 @@ from aiogram.client.default import DefaultBotProperties
 # ========== НАСТРОЙКИ ==========
 BOT_TOKEN = "8789237062:AAE03_Lw4-HO9cmxVn44-b4XHASCV-4Li50"
 
-# 👇 СПИСОК АДМИНОВ (добавляй ID через запятую)
+# 👇 СПИСОК АДМИНОВ
 ADMIN_IDS = [
-    1031022066,   # твой ID
-    # 987654321,   # ID второго админа (раскомментируй и вставь)
-    # 555555555,   # ID третьего админа
+    1031022066, 480615667  # твой ID
 ]
 
 PROJECT_NAME = "🏠 Будущий дом"
@@ -29,7 +27,6 @@ bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode="Markdown"))
 dp = Dispatcher()
 user_forms: Dict[int, Dict] = {}
 
-# Функция проверки админа
 def is_admin(user_id: int) -> bool:
     return user_id in ADMIN_IDS
 
@@ -298,23 +295,25 @@ async def q18(msg: Message, state: FSMContext):
     await msg.answer("Всё верно?", reply_markup=inline_buttons(["✅ Да, всё верно", "🔄 Начать заново"], "confirm", 2))
     await state.set_state(Form.q19_confirm)
 
-# ========== ОБРАБОТКА ФОТО ==========
+# ========== ОБРАБОТКА ФОТО (НОВАЯ ЛОГИКА) ==========
 @dp.callback_query(Form.q19_confirm, F.data == "confirm_✅ Да, всё верно")
 async def confirm_yes(call: CallbackQuery, state: FSMContext):
     await call.message.delete()
+    # Инициализируем список фото и счетчик
+    await state.update_data(photos=[], photos_count=0, waiting_more=False)
+    await state.set_state(Form.q20_photo)
+    
     await call.message.answer(
-        "📸 *Вопрос 20/20: Пришлите 1-3 фото комнаты*\n\nОтправляйте фото по одному. После загрузки всех фото нажмите «✅ Готово, отправить»",
+        "📸 *Вопрос 20/20: Отправьте фото комнаты*\n\n"
+        "Вы можете отправить 1-3 фото.\n\n"
+        "📌 *Как отправить:*\n"
+        "• Отправляйте фото по одному\n"
+        "• Или сразу несколько в одном сообщении (альбомом)\n\n"
+        "После каждого фото я спрошу: добавить ещё или закончить.\n\n"
+        "👉 *Отправьте первое фото*",
         parse_mode="Markdown",
         reply_markup=nav_kb
     )
-    
-    await state.update_data(photos=[])
-    await state.set_state(Form.q20_photo)
-    
-    builder = InlineKeyboardBuilder()
-    builder.button(text="✅ Готово, отправить", callback_data="photos_done")
-    await call.message.answer("👇 Когда загрузите все фото, нажмите кнопку:", reply_markup=builder.as_markup())
-    
     await call.answer()
 
 @dp.callback_query(Form.q19_confirm, F.data == "confirm_🔄 Начать заново")
@@ -323,33 +322,108 @@ async def confirm_no(call: CallbackQuery, state: FSMContext):
     await new_project(call.message, state)
     await call.answer()
 
+# Обработка одиночного фото
 @dp.message(Form.q20_photo, F.photo)
-async def get_photo(msg: Message, state: FSMContext):
+async def get_photo_single(msg: Message, state: FSMContext):
+    data = await state.get_data()
+    photos = data.get("photos", [])
+    current_count = len(photos)
+    
+    if current_count >= 3:
+        await msg.answer("❌ Вы уже отправили 3 фото. Нажмите «✅ Завершить и отправить»")
+        return
+    
+    # Добавляем фото
+    photos.append(msg.photo[-1].file_id)
+    await state.update_data(photos=photos)
+    current_count = len(photos)
+    
+    if current_count == 1:
+        await msg.answer(f"📸 Фото 1/3 сохранено.")
+    
+    # Спрашиваем, хочет ли пользователь добавить ещё
+    if current_count < 3:
+        builder = InlineKeyboardBuilder()
+        builder.button(text="➕ Добавить ещё фото", callback_data="add_more_photo")
+        builder.button(text="✅ Завершить и отправить", callback_data="finish_and_send")
+        builder.adjust(1)
+        
+        await msg.answer(
+            f"📸 Фото {current_count}/3 сохранено.\n\nЧто делаем дальше?",
+            reply_markup=builder.as_markup()
+        )
+        await state.update_data(waiting_more=True)
+    else:
+        # Достигнут лимит в 3 фото
+        await msg.answer("✅ Вы отправили максимальное количество фото (3). Заявка отправляется...")
+        await finish_and_send(msg, state)
+
+# Обработка альбома (несколько фото сразу)
+@dp.message(Form.q20_photo, F.media_group_id)
+async def get_photo_album(msg: Message, state: FSMContext, album: list = None):
+    # Получаем все фото из альбома
+    if not hasattr(msg, 'media_group_id'):
+        return
+    
     data = await state.get_data()
     photos = data.get("photos", [])
     
+    # Если это первое фото в альбоме, ждём остальные
+    if msg.media_group_id not in data.get("processing_albums", {}):
+        processing = data.get("processing_albums", {})
+        processing[msg.media_group_id] = []
+        await state.update_data(processing_albums=processing)
+        
+        # Ждём 1 секунду для сбора всех фото альбома
+        await asyncio.sleep(1)
+        
+        # Получаем все фото из этого альбома из хранилища
+        # (упрощённо: обрабатываем текущее фото)
+    
+    # Добавляем фото (упрощённо: добавляем каждое фото из альбома по отдельности)
+    new_photo = msg.photo[-1].file_id
+    if new_photo not in photos:
+        photos.append(new_photo)
+        await state.update_data(photos=photos)
+        await msg.answer(f"📸 Фото {len(photos)}/3 добавлено из альбома.")
+    
+    # Проверяем лимит
     if len(photos) >= 3:
-        await msg.answer("❌ Вы уже загрузили 3 фото. Нажмите «Готово, отправить»")
-        return
-    
-    photos.append(msg.photo[-1].file_id)
-    await state.update_data(photos=photos)
-    
-    remaining = 3 - len(photos)
-    await msg.answer(f"📸 Фото {len(photos)}/3 сохранено. Осталось {remaining}.")
+        await msg.answer("✅ Достигнут лимит в 3 фото. Заявка отправляется...")
+        await finish_and_send(msg, state)
 
-@dp.callback_query(F.data == "photos_done")
-async def photos_done(call: CallbackQuery, state: FSMContext):
+# Кнопка "Добавить ещё фото"
+@dp.callback_query(F.data == "add_more_photo")
+async def add_more_photo(call: CallbackQuery, state: FSMContext):
+    await call.message.delete()
+    await call.message.answer(
+        "📸 Отправьте следующее фото.\n\n"
+        "Можно отправить по одному или сразу несколько.",
+        reply_markup=nav_kb
+    )
+    await state.update_data(waiting_more=False)
+    await call.answer()
+
+# Кнопка "Завершить и отправить"
+@dp.callback_query(F.data == "finish_and_send")
+async def finish_and_send_callback(call: CallbackQuery, state: FSMContext):
+    await call.message.delete()
+    await finish_and_send(call.message, state)
+    await call.answer()
+
+# Функция отправки заявки
+async def finish_and_send(msg: Message, state: FSMContext):
     data = await state.get_data()
     photos = data.get("photos", [])
     
     if len(photos) == 0:
-        await call.message.answer("❌ Вы не загрузили ни одного фото. Отправьте хотя бы 1 фото.")
-        await call.answer()
+        await msg.answer("❌ Вы не отправили ни одного фото. Отправьте хотя бы 1 фото.")
         return
     
-    user_forms[call.from_user.id] = data
-    user_forms[call.from_user.id]['name'] = call.from_user.full_name
+    # Сохраняем данные пользователя
+    user_forms[msg.from_user.id] = data
+    user_forms[msg.from_user.id]['name'] = msg.from_user.full_name
+    user_forms[msg.from_user.id]['username'] = msg.from_user.username or "нет"
     
     zones_text = ', '.join(data.get('zones', []))
     caption = f"""
@@ -374,36 +448,38 @@ async def photos_done(call: CallbackQuery, state: FSMContext):
 😞 Не нравится: {data.get('dislike')}
 ❤️ Сохранить: {data.get('like')}
 
-👤 Клиент: {call.from_user.full_name}
-🆔 ID: `{call.from_user.id}`
+👤 Клиент: {msg.from_user.full_name}
+🆔 ID: `{msg.from_user.id}`
 📸 Фото: {len(photos)} шт.
 """
     
     # Отправляем ВСЕМ админам
     for admin_id in ADMIN_IDS:
         try:
-            for i, photo_id in enumerate(photos):
-                if i == 0:
-                    await bot.send_photo(admin_id, photo_id, caption=caption, parse_mode="Markdown")
-                else:
-                    await bot.send_photo(admin_id, photo_id)
+            # Отправляем первое фото с подписью
+            await bot.send_photo(admin_id, photos[0], caption=caption, parse_mode="Markdown")
+            # Отправляем остальные фото (если есть)
+            for i in range(1, len(photos)):
+                await bot.send_photo(admin_id, photos[i])
             print(f"✅ Заявка отправлена админу {admin_id}")
         except Exception as e:
             print(f"❌ Ошибка при отправке админу {admin_id}: {e}")
     
-    await call.message.edit_text(
-        "✨ *ГОТОВО!* ✨\n\nВаша заявка отправлена дизайнерам.\n\nСпасибо, что выбрали «Будущий дом»! 🏠",
+    await msg.answer(
+        "✨ *ГОТОВО!* ✨\n\n"
+        f"✅ Получено {len(photos)} фото\n\n"
+        "Ваша заявка отправлена дизайнерам.\n\n"
+        "Спасибо, что выбрали «Будущий дом»! 🏠",
         parse_mode="Markdown",
         reply_markup=main_menu
     )
     await state.clear()
-    await call.answer()
 
 @dp.message(Form.q20_photo)
 async def wrong_photo(msg: Message):
-    await msg.answer("❌ Отправьте фото комнаты.")
+    await msg.answer("❌ Пожалуйста, отправьте фото комнаты в формате изображения.")
 
-# ========== АДМИН КОМАНДЫ (для всех админов) ==========
+# ========== АДМИН КОМАНДЫ ==========
 @dp.message(Command("answer"))
 async def send_design(message: Message):
     if not is_admin(message.from_user.id):
@@ -422,7 +498,8 @@ async def send_design(message: Message):
         async def forward(msg: Message):
             if not is_admin(msg.from_user.id):
                 return
-            await bot.send_photo(user_id, msg.photo[-1].file_id, caption="🎉 Ваш дизайн-проект готов! 🏠")
+            await bot.send_photo(user_id, msg.photo[-1].file_id, 
+                                caption="🎉 Ваш дизайн-проект готов! Спасибо, что выбрали «Будущий дом»! 🏠")
             await msg.answer(f"✅ Дизайн отправлен пользователю {user_id}")
             dp.message_handlers.remove(forward)
     except:
@@ -439,7 +516,14 @@ async def show_users(message: Message):
     
     text = "📋 *Список клиентов:*\n\n"
     for uid, data in user_forms.items():
-        text += f"🆔 `{uid}` - {data.get('name', '?')}\n"
+        username = data.get('username', 'нет')
+        name = data.get('name', '?')
+        text += f"🆔 `{uid}` - {name} (@{username})\n"
+    
+    # Если текст слишком длинный, обрезаем
+    if len(text) > 4000:
+        text = text[:3500] + "\n\n... (список слишком длинный)"
+    
     await message.answer(text, parse_mode="Markdown")
 
 @dp.message(Command("stats"))
@@ -448,7 +532,7 @@ async def show_stats(message: Message):
         return
     
     stats_text = f"""
-📊 *Статистика*
+📊 *Статистика {PROJECT_NAME}*
 
 👥 Всего заявок: {len(user_forms)}
 👑 Количество админов: {len(ADMIN_IDS)}
@@ -469,7 +553,7 @@ async def main():
     try:
         me = await bot.get_me()
         print(f"✅ Бот подключился! Имя: {me.first_name}")
-        print("🚀 Бот работает!")
+        print("🚀 Бот работает с новой логикой фото!")
     except Exception as e:
         print(f"❌ Ошибка подключения: {e}")
         return
