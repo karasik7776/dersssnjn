@@ -12,7 +12,7 @@ from aiogram.client.default import DefaultBotProperties
 
 # ========== НАСТРОЙКИ ==========
 BOT_TOKEN = "8789237062:AAE03_Lw4-HO9cmxVn44-b4XHASCV-4Li50"
-ADMIN_IDS = [1031022066]          # можешь добавить ещё через запятую
+ADMIN_IDS = [1031022066, 480615667, 1126310185]          # можешь добавить ещё через запятую
 PROJECT_NAME = "🏠 Будущий дом"
 DATA_FILE = "user_forms.json"
 # ================================
