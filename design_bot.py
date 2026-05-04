@@ -11,35 +11,27 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message, CallbackQuery, ReplyKeyboardMarkup, KeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.client.default import DefaultBotProperties
-from aiogram.client.session.aiohttp import AiohttpSession
-
-# ПОДКЛЮЧЕНИЕ ПРОКСИ (если нужно)
-from aiohttp_socks import ProxyConnector
 
 # ========== НАСТРОЙКИ ==========
 BOT_TOKEN = "8789237062:AAE03_Lw4-HO9cmxVn44-b4XHASCV-4Li50"
-ADMIN_ID = 1031022066
-PROJECT_NAME = "🏠 Будущий дом"
 
-# ПРОКСИ (оставь пустым, если не нужен)
-# Для Render.com и обоихost.ru прокси НЕ НУЖЕН!
-# Если нужен прокси, раскомментируй и вставь свои данные:
-# PROXY_URL = "socks5://user224364:j1ow69@195.64.127.134:14478"
-PROXY_URL = None  # ← НЕ МЕНЯТЬ, если не используешь прокси
+# 👇 СПИСОК АДМИНОВ (добавляй ID через запятую)
+ADMIN_IDS = [
+    1031022066,   # твой ID
+    # 987654321,   # ID второго админа (раскомментируй и вставь)
+    # 555555555,   # ID третьего админа
+]
+
+PROJECT_NAME = "🏠 Будущий дом"
 # ================================
 
-# СОЗДАНИЕ БОТА (с прокси или без)
-if PROXY_URL:
-    connector = ProxyConnector.from_url(PROXY_URL)
-    session = AiohttpSession(connector=connector)
-    bot = Bot(token=BOT_TOKEN, session=session, default=DefaultBotProperties(parse_mode="Markdown"))
-    print(f"🌐 Бот запущен с прокси: {PROXY_URL}")
-else:
-    bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode="Markdown"))
-    print("🌐 Бот запущен без прокси (прямое подключение)")
-
+bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode="Markdown"))
 dp = Dispatcher()
 user_forms: Dict[int, Dict] = {}
+
+# Функция проверки админа
+def is_admin(user_id: int) -> bool:
+    return user_id in ADMIN_IDS
 
 # ========== КЛАВИАТУРЫ ==========
 main_menu = ReplyKeyboardMarkup(
@@ -90,7 +82,7 @@ def inline_buttons(options, prefix, cols=2):
 async def start(message: Message, state: FSMContext):
     await state.clear()
     await message.answer(
-        f"{PROJECT_NAME}\n\n🌟 Добро пожаловать!\n\nЯ задам 20 вопросов о вашей комнате.\n\nНажми «Новый проект», чтобы начать.",
+        f"{PROJECT_NAME}\n\n🌟 Добро пожаловать!\n\nЯ задам вопросы о вашей комнате.\n\nНажми «Новый проект», чтобы начать.",
         reply_markup=main_menu
     )
 
@@ -106,11 +98,11 @@ async def cancel(message: Message, state: FSMContext):
 
 @dp.message(F.text == "❓ Помощь")
 async def help_cmd(message: Message):
-    await message.answer("Нажми «Новый проект» и отвечай на 20 вопросов. В конце пришли 1-3 фото комнаты.")
+    await message.answer("Нажми «Новый проект» и отвечай на вопросы. В конце пришли 1-3 фото комнаты.")
 
 @dp.message(F.text == "ℹ️ О проекте")
 async def about(message: Message):
-    await message.answer(f"{PROJECT_NAME} — профессиональный дизайн интерьера. Мы учтём все ваши пожелания!")
+    await message.answer(f"{PROJECT_NAME} — профессиональный дизайн интерьера.")
 
 @dp.message(F.text == "🆕 Новый проект")
 async def new_project(message: Message, state: FSMContext):
@@ -306,15 +298,23 @@ async def q18(msg: Message, state: FSMContext):
     await msg.answer("Всё верно?", reply_markup=inline_buttons(["✅ Да, всё верно", "🔄 Начать заново"], "confirm", 2))
     await state.set_state(Form.q19_confirm)
 
+# ========== ОБРАБОТКА ФОТО ==========
 @dp.callback_query(Form.q19_confirm, F.data == "confirm_✅ Да, всё верно")
 async def confirm_yes(call: CallbackQuery, state: FSMContext):
     await call.message.delete()
-    await call.message.answer("📸 *Вопрос 20/20: Пришлите 1-3 фото комнаты*", parse_mode="Markdown", reply_markup=nav_kb)
-    builder = InlineKeyboardBuilder()
-    builder.button(text="✅ Готово, отправить", callback_data="photos_done")
-    await call.message.answer("После загрузки фото нажмите кнопку:", reply_markup=builder.as_markup())
+    await call.message.answer(
+        "📸 *Вопрос 20/20: Пришлите 1-3 фото комнаты*\n\nОтправляйте фото по одному. После загрузки всех фото нажмите «✅ Готово, отправить»",
+        parse_mode="Markdown",
+        reply_markup=nav_kb
+    )
+    
     await state.update_data(photos=[])
     await state.set_state(Form.q20_photo)
+    
+    builder = InlineKeyboardBuilder()
+    builder.button(text="✅ Готово, отправить", callback_data="photos_done")
+    await call.message.answer("👇 Когда загрузите все фото, нажмите кнопку:", reply_markup=builder.as_markup())
+    
     await call.answer()
 
 @dp.callback_query(Form.q19_confirm, F.data == "confirm_🔄 Начать заново")
@@ -327,23 +327,27 @@ async def confirm_no(call: CallbackQuery, state: FSMContext):
 async def get_photo(msg: Message, state: FSMContext):
     data = await state.get_data()
     photos = data.get("photos", [])
+    
     if len(photos) >= 3:
-        await msg.answer("❌ Уже 3 фото. Нажмите «Готово»")
+        await msg.answer("❌ Вы уже загрузили 3 фото. Нажмите «Готово, отправить»")
         return
+    
     photos.append(msg.photo[-1].file_id)
     await state.update_data(photos=photos)
+    
     remaining = 3 - len(photos)
     await msg.answer(f"📸 Фото {len(photos)}/3 сохранено. Осталось {remaining}.")
 
 @dp.callback_query(F.data == "photos_done")
-async def finish(call: CallbackQuery, state: FSMContext):
+async def photos_done(call: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     photos = data.get("photos", [])
+    
     if len(photos) == 0:
-        await call.message.answer("❌ Отправьте хотя бы 1 фото")
+        await call.message.answer("❌ Вы не загрузили ни одного фото. Отправьте хотя бы 1 фото.")
+        await call.answer()
         return
     
-    # Сохраняем данные пользователя
     user_forms[call.from_user.id] = data
     user_forms[call.from_user.id]['name'] = call.from_user.full_name
     
@@ -375,11 +379,17 @@ async def finish(call: CallbackQuery, state: FSMContext):
 📸 Фото: {len(photos)} шт.
 """
     
-    for i, photo_id in enumerate(photos):
-        if i == 0:
-            await bot.send_photo(ADMIN_ID, photo_id, caption=caption, parse_mode="Markdown")
-        else:
-            await bot.send_photo(ADMIN_ID, photo_id)
+    # Отправляем ВСЕМ админам
+    for admin_id in ADMIN_IDS:
+        try:
+            for i, photo_id in enumerate(photos):
+                if i == 0:
+                    await bot.send_photo(admin_id, photo_id, caption=caption, parse_mode="Markdown")
+                else:
+                    await bot.send_photo(admin_id, photo_id)
+            print(f"✅ Заявка отправлена админу {admin_id}")
+        except Exception as e:
+            print(f"❌ Ошибка при отправке админу {admin_id}: {e}")
     
     await call.message.edit_text(
         "✨ *ГОТОВО!* ✨\n\nВаша заявка отправлена дизайнерам.\n\nСпасибо, что выбрали «Будущий дом»! 🏠",
@@ -391,26 +401,28 @@ async def finish(call: CallbackQuery, state: FSMContext):
 
 @dp.message(Form.q20_photo)
 async def wrong_photo(msg: Message):
-    await msg.answer("❌ Отправьте фото комнаты или нажмите «Готово»")
+    await msg.answer("❌ Отправьте фото комнаты.")
 
-# ========== АДМИН КОМАНДЫ ==========
+# ========== АДМИН КОМАНДЫ (для всех админов) ==========
 @dp.message(Command("answer"))
 async def send_design(message: Message):
-    if message.from_user.id != ADMIN_ID:
+    if not is_admin(message.from_user.id):
         return
+    
     args = message.text.split()
     if len(args) != 2:
         await message.answer("❌ Использование: /answer USER_ID")
         return
+    
     try:
         user_id = int(args[1])
         await message.answer(f"📸 Отправьте фото дизайна для пользователя {user_id}")
         
         @dp.message(F.photo)
         async def forward(msg: Message):
-            if msg.from_user.id != ADMIN_ID:
+            if not is_admin(msg.from_user.id):
                 return
-            await bot.send_photo(user_id, msg.photo[-1].file_id, caption="🎉 Ваш дизайн-проект готов! Спасибо, что выбрали нас! 🏠")
+            await bot.send_photo(user_id, msg.photo[-1].file_id, caption="🎉 Ваш дизайн-проект готов! 🏠")
             await msg.answer(f"✅ Дизайн отправлен пользователю {user_id}")
             dp.message_handlers.remove(forward)
     except:
@@ -418,11 +430,13 @@ async def send_design(message: Message):
 
 @dp.message(Command("users"))
 async def show_users(message: Message):
-    if message.from_user.id != ADMIN_ID:
+    if not is_admin(message.from_user.id):
         return
+    
     if not user_forms:
         await message.answer("📭 Нет активных заявок")
         return
+    
     text = "📋 *Список клиентов:*\n\n"
     for uid, data in user_forms.items():
         text += f"🆔 `{uid}` - {data.get('name', '?')}\n"
@@ -430,23 +444,34 @@ async def show_users(message: Message):
 
 @dp.message(Command("stats"))
 async def show_stats(message: Message):
-    if message.from_user.id != ADMIN_ID:
+    if not is_admin(message.from_user.id):
         return
-    await message.answer(f"📊 *Статистика*\n\n👥 Всего заявок: {len(user_forms)}", parse_mode="Markdown")
+    
+    stats_text = f"""
+📊 *Статистика*
+
+👥 Всего заявок: {len(user_forms)}
+👑 Количество админов: {len(ADMIN_IDS)}
+
+📋 Список админов:
+"""
+    for admin_id in ADMIN_IDS:
+        stats_text += f"• `{admin_id}`\n"
+    
+    await message.answer(stats_text, parse_mode="Markdown")
 
 # ========== ЗАПУСК ==========
 async def main():
     print(f"🤖 {PROJECT_NAME} запущен!")
-    print(f"👑 Админ: {ADMIN_ID}")
+    print(f"👑 Админы: {ADMIN_IDS}")
+    print(f"📊 Всего админов: {len(ADMIN_IDS)}")
     
-    # Проверка подключения
     try:
         me = await bot.get_me()
         print(f"✅ Бот подключился! Имя: {me.first_name}")
-        print("🚀 Бот работает с 20 вопросами!")
+        print("🚀 Бот работает!")
     except Exception as e:
         print(f"❌ Ошибка подключения: {e}")
-        print("Проверь токен и интернет!")
         return
     
     await dp.start_polling(bot)
