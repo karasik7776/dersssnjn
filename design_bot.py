@@ -161,8 +161,7 @@ async def send_design(message: Message, state: FSMContext):
         return
     await state.set_state(AdminStates.waiting_user_id_photo)
     await message.answer(
-        "📸 *Введите ID пользователя* (число):\n\n"
-        "ID можно найти в списке клиентов (/users)",
+        "📸 *Введите ID пользователя* (число):\n\nID можно найти в списке клиентов (/users)",
         parse_mode="Markdown",
         reply_markup=ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="🔙 Отмена")]], resize_keyboard=True)
     )
@@ -248,50 +247,45 @@ async def np(message: Message, state: FSMContext):
 
 @dp.callback_query(Form.room, F.data.startswith("room_"))
 async def q1(call: CallbackQuery, state: FSMContext):
-    await state.update_data(room=call.data.split("_")[1])
     await call.message.delete()
+    await state.update_data(room=call.data.split("_")[1])
     await call.message.answer("📏 *Вопрос 2/20: Площадь комнаты?*", parse_mode="Markdown", reply_markup=nav_kb)
     await call.message.answer("Выберите:", reply_markup=inline_buttons(
         ["До 12 м²", "12-20 м²", "20+ м²", "Не знаю"], "area"))
     await state.set_state(Form.area)
-    await call.answer()
 
 @dp.callback_query(Form.area, F.data.startswith("area_"))
 async def q2(call: CallbackQuery, state: FSMContext):
-    await state.update_data(area=call.data.split("_")[1])
     await call.message.delete()
+    await state.update_data(area=call.data.split("_")[1])
     await call.message.answer("🪟 *Вопрос 3/20: Сколько окон в комнате?*", parse_mode="Markdown", reply_markup=nav_kb)
     await call.message.answer("Выберите:", reply_markup=inline_buttons(
         ["Нет окон", "1 окно", "2 окна", "Больше 2"], "windows"))
     await state.set_state(Form.windows)
-    await call.answer()
 
 @dp.callback_query(Form.windows, F.data.startswith("windows_"))
 async def q3(call: CallbackQuery, state: FSMContext):
-    await state.update_data(windows=call.data.split("_")[1])
     await call.message.delete()
+    await state.update_data(windows=call.data.split("_")[1])
     await call.message.answer("🎨 *Вопрос 4/20: Какой стиль интерьера?*", parse_mode="Markdown", reply_markup=nav_kb)
     await call.message.answer("Выберите:", reply_markup=inline_buttons(
         ["Современный", "Минимализм", "Лофт", "Скандинавский", "Классика", "Прованс", "Эко", "Свой вариант"], "style"))
     await state.set_state(Form.style)
-    await call.answer()
 
 @dp.callback_query(Form.style, F.data == "style_Свой вариант")
 async def custom_style(call: CallbackQuery, state: FSMContext):
     await call.message.delete()
     await call.message.answer("✏️ Напишите свой вариант стиля:", reply_markup=nav_kb)
     await state.set_state(Form.style)
-    await call.answer()
 
 @dp.callback_query(Form.style, F.data.startswith("style_"))
 async def q4(call: CallbackQuery, state: FSMContext):
-    await state.update_data(style=call.data.split("_")[1])
     await call.message.delete()
+    await state.update_data(style=call.data.split("_")[1])
     await call.message.answer("🧘 *Вопрос 5/20: Какое настроение хотите создать?*", parse_mode="Markdown", reply_markup=nav_kb)
     await call.message.answer("Выберите:", reply_markup=inline_buttons(
         ["Уютное", "Строгое", "Романтичное", "Игривое", "Яркое", "Спокойное", "Минималистичное", "Другое"], "mood"))
     await state.set_state(Form.mood)
-    await call.answer()
 
 @dp.message(Form.style)
 async def custom_style_text(msg: Message, state: FSMContext):
@@ -306,17 +300,15 @@ async def custom_mood(call: CallbackQuery, state: FSMContext):
     await call.message.delete()
     await call.message.answer("✏️ Опишите желаемое настроение:", reply_markup=nav_kb)
     await state.set_state(Form.mood)
-    await call.answer()
 
 @dp.callback_query(Form.mood, F.data.startswith("mood_"))
 async def q5(call: CallbackQuery, state: FSMContext):
-    await state.update_data(mood=call.data.split("_")[1])
     await call.message.delete()
+    await state.update_data(mood=call.data.split("_")[1])
     await call.message.answer("💰 *Вопрос 6/20: Какой бюджет на проект?*", parse_mode="Markdown", reply_markup=nav_kb)
     await call.message.answer("Выберите:", reply_markup=inline_buttons(
         ["Эконом", "Средний бюджет", "Премиум", "Без разницы"], "budget"))
     await state.set_state(Form.budget)
-    await call.answer()
 
 @dp.message(Form.mood)
 async def custom_mood_text(msg: Message, state: FSMContext):
@@ -328,11 +320,10 @@ async def custom_mood_text(msg: Message, state: FSMContext):
 
 @dp.callback_query(Form.budget, F.data.startswith("budget_"))
 async def q6(call: CallbackQuery, state: FSMContext):
-    await state.update_data(budget=call.data.split("_")[1])
     await call.message.delete()
+    await state.update_data(budget=call.data.split("_")[1])
     await call.message.answer("🎨 *Вопрос 7/20: Какие цвета хотите видеть?* (через запятую)", parse_mode="Markdown", reply_markup=nav_kb)
     await state.set_state(Form.colors_like)
-    await call.answer()
 
 @dp.message(Form.colors_like)
 async def q7(msg: Message, state: FSMContext):
@@ -350,14 +341,13 @@ async def q8(msg: Message, state: FSMContext):
 
 @dp.callback_query(Form.light_dark, F.data.startswith("lightdark_"))
 async def q9(call: CallbackQuery, state: FSMContext):
-    await state.update_data(light_dark=call.data.split("_")[1])
     await call.message.delete()
+    await state.update_data(light_dark=call.data.split("_")[1])
     await call.message.answer("📌 *Вопрос 10/20: Какие зоны должны быть?* (выберите, затем «Готово»)", parse_mode="Markdown", reply_markup=nav_kb)
     await call.message.answer("Зоны:", reply_markup=inline_buttons(
         ["Отдых", "Работа", "Приём гостей", "Хранение", "Обеденная", "Спорт", "Другое"], "zone"))
     await state.update_data(zones=[])
     await state.set_state(Form.zones)
-    await call.answer()
 
 @dp.callback_query(Form.zones, F.data.startswith("zone_"))
 async def zone_choice(call: CallbackQuery, state: FSMContext):
@@ -368,7 +358,6 @@ async def zone_choice(call: CallbackQuery, state: FSMContext):
         await call.message.delete()
         await call.message.answer("✏️ Напишите название зоны:", reply_markup=nav_kb)
         await state.set_state(Form.zones)
-        await call.answer()
         return
     if zone not in zones:
         zones.append(zone)
@@ -376,7 +365,6 @@ async def zone_choice(call: CallbackQuery, state: FSMContext):
     builder = InlineKeyboardBuilder()
     builder.button(text="✅ Готово", callback_data="zones_done")
     await call.message.edit_reply_markup(reply_markup=builder.as_markup())
-    await call.answer()
 
 @dp.callback_query(F.data == "zones_done")
 async def zones_done(call: CallbackQuery, state: FSMContext):
@@ -384,7 +372,6 @@ async def zones_done(call: CallbackQuery, state: FSMContext):
     await call.message.answer("👥 *Вопрос 11/20: Сколько человек будут использовать комнату?*", parse_mode="Markdown", reply_markup=nav_kb)
     await call.message.answer("Выберите:", reply_markup=inline_buttons(["1", "2-3", "4+"], "people"))
     await state.set_state(Form.people)
-    await call.answer()
 
 @dp.message(Form.zones)
 async def zone_other(msg: Message, state: FSMContext):
@@ -398,21 +385,19 @@ async def zone_other(msg: Message, state: FSMContext):
 
 @dp.callback_query(Form.people, F.data.startswith("people_"))
 async def q11(call: CallbackQuery, state: FSMContext):
-    await state.update_data(people=call.data.split("_")[1])
     await call.message.delete()
+    await state.update_data(people=call.data.split("_")[1])
     await call.message.answer("💡 *Вопрос 12/20: Какой тип освещения нравится?*", parse_mode="Markdown", reply_markup=nav_kb)
     await call.message.answer("Выберите:", reply_markup=inline_buttons(
         ["Естественное+доп.", "Только верхний", "Много точечных", "Мягкий рассеянный", "Яркое белое", "Тёплое жёлтое"], "lighting"))
     await state.set_state(Form.lighting)
-    await call.answer()
 
 @dp.callback_query(Form.lighting, F.data.startswith("lighting_"))
 async def q12(call: CallbackQuery, state: FSMContext):
-    await state.update_data(lighting=call.data.split("_")[1])
     await call.message.delete()
+    await state.update_data(lighting=call.data.split("_")[1])
     await call.message.answer("🪑 *Вопрос 13/20: Какая мебель обязательно нужна?* (через запятую)", parse_mode="Markdown", reply_markup=nav_kb)
     await state.set_state(Form.furniture)
-    await call.answer()
 
 @dp.message(Form.furniture)
 async def q13(msg: Message, state: FSMContext):
@@ -429,20 +414,18 @@ async def q14(msg: Message, state: FSMContext):
 
 @dp.callback_query(Form.eco, F.data.startswith("eco_"))
 async def q15(call: CallbackQuery, state: FSMContext):
-    await state.update_data(eco=call.data.split("_")[1])
     await call.message.delete()
+    await state.update_data(eco=call.data.split("_")[1])
     await call.message.answer("🐾 *Вопрос 16/20: Есть ли домашние питомцы?*", parse_mode="Markdown", reply_markup=nav_kb)
     await call.message.answer("Выберите:", reply_markup=inline_buttons(["Кошка", "Собака", "Грызуны", "Нет"], "pets"))
     await state.set_state(Form.pets)
-    await call.answer()
 
 @dp.callback_query(Form.pets, F.data.startswith("pets_"))
 async def q16(call: CallbackQuery, state: FSMContext):
-    await state.update_data(pets=call.data.split("_")[1])
     await call.message.delete()
+    await state.update_data(pets=call.data.split("_")[1])
     await call.message.answer("😞 *Вопрос 17/20: Что вам не нравится в текущем интерьере?*", parse_mode="Markdown", reply_markup=nav_kb)
     await state.set_state(Form.dislike)
-    await call.answer()
 
 @dp.message(Form.dislike)
 async def q17(msg: Message, state: FSMContext):
@@ -483,7 +466,7 @@ async def q18(msg: Message, state: FSMContext):
     await msg.answer("Всё верно?", reply_markup=inline_buttons(["✅ Да, всё верно", "🔄 Начать заново"], "confirm"))
     await state.set_state(Form.confirm)
 
-# ========== ОБРАБОТКА ФОТО (ИСПРАВЛЕННАЯ) ==========
+# ========== ФОТО ==========
 @dp.callback_query(Form.confirm, F.data == "confirm_✅ Да, всё верно")
 async def confirm_yes(call: CallbackQuery, state: FSMContext):
     await call.message.delete()
@@ -498,15 +481,12 @@ async def confirm_yes(call: CallbackQuery, state: FSMContext):
     builder = InlineKeyboardBuilder()
     builder.button(text="✅ Готово", callback_data="photos_done")
     await call.message.answer("👇 Кнопка для завершения:", reply_markup=builder.as_markup())
-    await call.answer()
 
 @dp.callback_query(Form.confirm, F.data == "confirm_🔄 Начать заново")
 async def confirm_no(call: CallbackQuery, state: FSMContext):
     await call.message.delete()
     await np(call.message, state)
-    await call.answer()
 
-# Приём фото во время опроса
 @dp.message(Form.photo, F.photo)
 async def add_photo(msg: Message, state: FSMContext):
     data = await state.get_data()
@@ -522,7 +502,6 @@ async def add_photo(msg: Message, state: FSMContext):
     remaining = 3 - len(photos)
     await msg.answer(f"📸 Фото {len(photos)}/3 сохранено. Осталось {remaining}.")
     
-    # Если отправили 3 фото — автоматически завершаем
     if len(photos) == 3:
         await msg.answer("✅ Вы отправили 3 фото. Заявка отправляется...")
         await finish_survey(msg, state)
@@ -531,7 +510,6 @@ async def add_photo(msg: Message, state: FSMContext):
 async def photos_done_callback(call: CallbackQuery, state: FSMContext):
     await call.message.delete()
     await finish_survey(call.message, state)
-    await call.answer()
 
 async def finish_survey(msg: Message, state: FSMContext):
     data = await state.get_data()
@@ -541,7 +519,6 @@ async def finish_survey(msg: Message, state: FSMContext):
         await msg.answer("❌ Вы не отправили ни одного фото. Отправьте хотя бы 1 фото.")
         return
 
-    # Сохраняем заявку
     user_forms[str(msg.from_user.id)] = {
         "user_id": msg.from_user.id,
         "name": msg.from_user.full_name,
@@ -568,7 +545,6 @@ async def finish_survey(msg: Message, state: FSMContext):
     }
     save_forms()
 
-    # Отправляем админам
     zones_txt = ", ".join(data.get("zones", []))
     caption = f"""
 📋 *НОВАЯ ЗАЯВКА* #{datetime.now().strftime('%Y%m%d%H%M%S')}
@@ -599,7 +575,7 @@ async def finish_survey(msg: Message, state: FSMContext):
             for p in photos[1:]:
                 await bot.send_photo(admin_id, p)
         except Exception as e:
-            print(f"Ошибка отправки админу {admin_id}: {e}")
+            print(f"Ошибка админу {admin_id}: {e}")
 
     await msg.answer(
         "✨ *ГОТОВО!* ✨\n\n"
@@ -613,10 +589,13 @@ async def finish_survey(msg: Message, state: FSMContext):
         await show_admin_menu(msg)
     await state.clear()
 
-# Обработчик фото для админов (отправка дизайна)
+@dp.message(Form.photo)
+async def wrong_photo_input(msg: Message):
+    await msg.answer("❌ Отправьте фото комнаты в формате изображения.")
+
+# ========== АДМИН: ОТПРАВКА ДИЗАЙНА (ФОТО) ==========
 @dp.message(F.photo)
 async def admin_send_design_photo(message: Message):
-    # Только если это админ И есть ожидание отправки
     if not is_admin(message.from_user.id):
         return
     if message.from_user.id not in waiting_for_design:
@@ -637,16 +616,11 @@ async def admin_send_design_photo(message: Message):
     except Exception as e:
         await message.answer(f"❌ *Ошибка отправки:* {str(e)}", parse_mode="Markdown")
 
-@dp.message(Form.photo)
-async def wrong_photo_input(msg: Message):
-    await msg.answer("❌ Отправьте фото комнаты в формате изображения.")
-
 # ========== ЗАПУСК ==========
 async def main():
     print(f"🤖 {PROJECT_NAME} запущен!")
     print(f"👑 Админы: {ADMIN_IDS}")
     print(f"📂 Загружено заявок: {len(user_forms)}")
-    print("🚀 Бот работает! Отправка фото работает.")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
