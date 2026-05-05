@@ -1,7 +1,7 @@
 import asyncio
 import json
 import os
-import signal
+import random
 from datetime import datetime
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.filters import Command
@@ -17,9 +17,11 @@ ADMIN_IDS = [1031022066, 480615667, 1126310185]
 PROJECT_NAME = "🏠 Будущий дом"
 DATA_FILE = "user_forms.json"
 
-# Защита от флуда
-MESSAGE_DELAY = 0.5
-CALLBACK_DELAY = 0.3
+# ПРАВИЛЬНЫЕ ЗАДЕРЖКИ (Telegram требует 5-30 секунд)
+MESSAGE_DELAY = 3.0      # 3 секунды между сообщениями (минимально безопасно)
+CALLBACK_DELAY = 1.5     # 1.5 секунды между callback
+RETRY_DELAY = 10.0       # 10 секунд при ошибке
+MAX_RETRY_DELAY = 60.0   # максимум 60 секунд
 # ================================
 
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode="Markdown"))
@@ -29,8 +31,27 @@ waiting_for_design = {}
 waiting_for_message = {}
 
 async def safe_send(message_func, *args, **kwargs):
+    """Отправка с защитой от флуда"""
     await asyncio.sleep(MESSAGE_DELAY)
-    return await message_func(*args, **kwargs)
+    try:
+        return await message_func(*args, **kwargs)
+    except Exception as e:
+        if "Flood" in str(e) or "Too Many Requests" in str(e):
+            print(f"⚠️ Flood control, ждём {RETRY_DELAY}с...")
+            await asyncio.sleep(RETRY_DELAY)
+            return await message_func(*args, **kwargs)
+        raise
+
+async def safe_edit(call: CallbackQuery, *args, **kwargs):
+    """Безопасное редактирование сообщения"""
+    await asyncio.sleep(CALLBACK_DELAY)
+    try:
+        return await call.message.edit_text(*args, **kwargs)
+    except Exception as e:
+        if "Flood" in str(e):
+            await asyncio.sleep(RETRY_DELAY)
+            return await call.message.edit_text(*args, **kwargs)
+        raise
 
 def load_forms():
     global user_forms
@@ -113,7 +134,7 @@ async def show_admin_menu(message: Message):
 async def start(message: Message, state: FSMContext):
     await state.clear()
     await safe_send(message.answer,
-        f"{PROJECT_NAME}\n\n🌟 Добро пожаловать!\n\nНажми «Новый проект», чтобы начать опрос (20 вопросов).",
+        f"{PROJECT_NAME}\n\n🌟 Добро пожаловать!\n\nНажми «Новый проект», чтобы начать опрос.",
         reply_markup=main_menu
     )
     if is_admin(message.from_user.id):
@@ -643,33 +664,15 @@ async def admin_send_design_photo(message: Message):
     except Exception as e:
         await safe_send(message.answer, f"❌ *Ошибка отправки:* {str(e)}", parse_mode="Markdown")
 
-# ========== ОБРАБОТКА SIGTERM ==========
-async def shutdown():
-    print("⚠️ Получен сигнал SIGTERM, бот завершает работу...")
-    await bot.session.close()
-    print("✅ Бот корректно остановлен")
-    os._exit(0)
-
-def handle_sigterm():
-    asyncio.create_task(shutdown())
-
-signal.signal(signal.SIGTERM, lambda s, f: handle_sigterm())
-
 # ========== ЗАПУСК ==========
 async def main():
     print(f"🤖 {PROJECT_NAME} запущен!")
     print(f"👑 Админы: {ADMIN_IDS}")
-    print(f"📂 Загружено заявок: {len(user_forms)}")
     print(f"🌊 Защита от флуда: задержка {MESSAGE_DELAY}с между сообщениями")
+    print(f"🌊 При ошибке задержка увеличится до {RETRY_DELAY}-{MAX_RETRY_DELAY}с")
     
-    # Пытаемся остановить предыдущие экземпляры
-    try:
-        await bot.delete_webhook(drop_pending_updates=True)
-        print("🔄 Webhook очищен, старые обновления отброшены")
-    except Exception as e:
-        print(f"⚠️ Ошибка очистки webhook: {e}")
-    
-    await dp.start_polling(bot, polling_timeout=60)
+    await bot.delete_webhook(drop_pending_updates=True)
+    await dp.start_polling(bot)
 
 if __name__ == "__main__":
     asyncio.run(main())
