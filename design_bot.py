@@ -648,6 +648,7 @@ async def shutdown():
     print("⚠️ Получен сигнал SIGTERM, бот завершает работу...")
     await bot.session.close()
     print("✅ Бот корректно остановлен")
+    os._exit(0)
 
 def handle_sigterm():
     asyncio.create_task(shutdown())
@@ -660,6 +661,14 @@ async def main():
     print(f"👑 Админы: {ADMIN_IDS}")
     print(f"📂 Загружено заявок: {len(user_forms)}")
     print(f"🌊 Защита от флуда: задержка {MESSAGE_DELAY}с между сообщениями")
+    
+    # Пытаемся остановить предыдущие экземпляры
+    try:
+        await bot.delete_webhook(drop_pending_updates=True)
+        print("🔄 Webhook очищен, старые обновления отброшены")
+    except Exception as e:
+        print(f"⚠️ Ошибка очистки webhook: {e}")
+    
     await dp.start_polling(bot, polling_timeout=60)
 
 if __name__ == "__main__":
